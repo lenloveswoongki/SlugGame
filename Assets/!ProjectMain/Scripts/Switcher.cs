@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
-public class Switcher : MonoBehaviour, IInteractible
+public class Switcher : MonoBehaviour
 {
     [SerializeField] Transform _trap = default;
     [SerializeField] Tilemap _tilemap = default;

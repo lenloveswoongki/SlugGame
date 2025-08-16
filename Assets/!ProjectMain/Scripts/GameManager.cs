@@ -11,6 +11,7 @@ public class GameManager : MonoBehaviour
     public CameraManager mainCamera = default;
     public AudioSource mainAudioSource = default;
     public AudioSource mainSong = default;
+    public LevelManager currentLevel;
 
     [Header("Timer")]
     public float timer = default;
@@ -35,7 +36,7 @@ public class GameManager : MonoBehaviour
     {
         while (timer > 0)
         {
-            timer -= Time.deltaTime;
+            timer -= Time.time;
             _timerText.text = timer.ToString();
             yield return null;
         }
@@ -56,8 +57,6 @@ public class GameManager : MonoBehaviour
         Time.timeScale = 1;
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex + 1);
     }
-}
-public interface IInteractible
-{
-    public void OnInteract();
+
+
 }

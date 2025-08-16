@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class Door : MonoBehaviour, IInteractible
+public class Door : MonoBehaviour
 {
     public Action _activatation = default;
     public void Start()

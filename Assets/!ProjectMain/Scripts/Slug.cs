@@ -1,17 +1,16 @@
 
 using System.Collections;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
 public class Slug : MonoBehaviour
 {
-    [SerializeField] private Tilemap floor;
-    [SerializeField] private Tilemap _slugMap = default;
+    [SerializeField] private GameTilemaps _maps;
+    [SerializeField] private TileBase _slugFaceTile;
     [SerializeField] private SlugTiles _slugTiles = default;
-    [SerializeField] private Transform _boxCollider = default;
     private List<Vector3Int> _slugBody = default;
-    [SerializeField] private Transform _startPos = default;
     private Vector3Int headPosition = default;
     [SerializeField] private Vector3Int direction = default;
     private bool _canMove = false;
@@ -23,14 +22,38 @@ public class Slug : MonoBehaviour
     [Header("Sounds")]
     [SerializeField] private AudioClip _slide = default;
     [SerializeField] private AudioClip _collision = default;
-    private void Start()
+    public void BeginPlay(Vector3Int startPos)
     {
         _gameManager = GameManager.Instance;
         _mainCamera = _gameManager.mainCamera;
-        headPosition = new Vector3Int((int)_startPos.position.x, (int)_startPos.position.y, (int)_startPos.position.z);
+        headPosition = new Vector3Int((int)startPos.x, (int)startPos.y, (int)startPos.z);
         _slugBody = new List<Vector3Int>();
         _slugBody.Add(headPosition);
-        _slugMap.SetTile(headPosition, _slugTiles.GetTile(headPosition));
+        SpawnHead();
+    }
+
+    public void SpawnHead()
+    {
+        Vector3Int[] positions = new Vector3Int[]
+        {
+            Vector3Int.up + headPosition,
+            Vector3Int.down + headPosition,
+            Vector3Int.left + headPosition,
+            Vector3Int.right + headPosition
+        };
+
+        foreach (Vector3Int i in positions)
+        {
+
+            if (_maps.floorMap.HasTile(i))
+            {
+                _maps.slugMap.SetTile(headPosition, _slugTiles.GetHeadTile(i, headPosition));
+                _maps.slugFace.SetTile(headPosition, _slugFaceTile);
+                _maps.slugMap.SetTile(i, _slugTiles.GetHeadTile(headPosition, i));
+                _slugBody.Add(i);
+                return;
+            }
+        }
     }
 
     private void Update()
@@ -59,42 +82,47 @@ public class Slug : MonoBehaviour
 
     private IEnumerator MovementCorroutine()
     {
-        Vector3Int newHeadPosition;
-        while (!_hasCollided)
+
+        Vector3Int targetPosition; // The grid position where the slug will go
+
+        while (true)
         {
-            newHeadPosition = headPosition + direction;
-            if (floor.HasTile(newHeadPosition) && !_slugMap.HasTile(newHeadPosition))
+
+            targetPosition = headPosition + direction;
+
+            HandleCollision(targetPosition);
+            if (_hasCollided)
             {
-                _gameManager.mainAudioSource.clip = _slide;
-                _gameManager.mainAudioSource.Play();
-                _slugBody.Insert(0, newHeadPosition);
-                _slugMap.SetTile(newHeadPosition, _slugTiles.GetTile(direction));
-
-
-                for (int i = 1; i < _slugBody.Count; i++)
-                {
-                    Vector3Int bodySegment = _slugBody[i];
-                    Vector3Int nextPosition = _slugBody[i - 1];
-                    _slugMap.SetTile(bodySegment, _slugTiles.GetTile(bodySegment, nextPosition));
-                }
-
-
-                Vector3Int lastPosition = _slugBody[_slugBody.Count - 1];
-                _slugMap.SetTile(lastPosition, _slugTiles.GetTile(headPosition, newHeadPosition));
-
-
-                headPosition = newHeadPosition;
-                yield return new WaitForSeconds(0.06f);
+                yield break;
             }
-            else
-            {
-                _hasCollided = true;
-                _canMove = true;
-                _mainCamera.ShakeCamera();
-                _gameManager.mainAudioSource.clip = _collision;
-                _gameManager.mainAudioSource.Play();
-                _boxCollider.transform.position = headPosition;
-            }
+
+            _maps.slugMap.SetTile(headPosition, _slugTiles.GetTile(headPosition, targetPosition));
+
+
+            _slugBody.Insert(0, targetPosition);
+            _maps.slugFace.ClearAllTiles();
+            _maps.slugMap.SetTile(targetPosition, _slugTiles.GetHeadTile(headPosition, targetPosition));
+
+            headPosition = targetPosition;
+            _maps.slugFace.SetTile(headPosition, _slugFaceTile);
+            yield return new WaitForSeconds(0.06f);
+        }
+    }
+
+
+    private void HandleCollision(Vector3Int targetPosition)
+    {
+        if (!_maps.floorMap.HasTile(targetPosition) || _maps.slugMap.HasTile(targetPosition))
+        {
+            _hasCollided = true;
+            _canMove = true;
+            _mainCamera.ShakeCamera();
+            _gameManager.mainAudioSource.clip = _collision;
+            _gameManager.mainAudioSource.Play();
+        }
+        if (_maps.interactiblesMap.HasTile(targetPosition))
+        {
+            _maps.interactiblesMap.GetTile<ScriptableTile>(targetPosition).Interact();
         }
     }
     private Vector3Int GetDirection()
@@ -134,29 +162,13 @@ public class Slug : MonoBehaviour
     private void ReverseSnake()
     {
 
-        Vector3Int lastSegment = _slugBody[_slugBody.Count - 1];
-        Vector3Int firstSegment = _slugBody[0];
-        _slugBody.Insert(0, lastSegment);
-        _slugBody.Insert(_slugBody.Count, firstSegment);
+        _maps.slugFace.ClearAllTiles();
 
-        _slugMap.SetTile(lastSegment, _slugTiles.GetTile(direction));
-        _slugMap.SetTile(firstSegment, _slugTiles.GetTile(firstSegment, _slugBody[_slugBody.Count - 2]));
-
-        //  for (int i = 1; i < _slugBody.Count; i++)
-        //  {
-        //     Vector3Int bodySegment = _slugBody[i];
-        //      Vector3Int nextPosition = _slugBody[i - 1];
-        //      _slugMap.SetTile(bodySegment, _slugTiles.GetTile(bodySegment, nextPosition));
-        //   }
+        _slugBody.Reverse();
+        _maps.slugMap.SetTile(_slugBody[0], _slugTiles.GetHeadTile(_slugBody[1], _slugBody[0]));
+        _maps.slugMap.SetTile(_slugBody[_slugBody.Count - 1], _slugTiles.GetHeadTile(_slugBody[_slugBody.Count - 2], _slugBody[_slugBody.Count - 1]));
+        _maps.slugFace.SetTile(_slugBody[0], _slugFaceTile);
         headPosition = _slugBody[0];
-    }
-
-    private void OnCollisionEnter2D(Collision2D collision)
-    {
-        if (collision.collider.GetComponent<IInteractible>() != null)
-        {          
-            collision.collider.GetComponent<IInteractible>().OnInteract();
-        }
     }
     [System.Serializable]
     public class SlugTiles
@@ -183,17 +195,20 @@ public class Slug : MonoBehaviour
             }
         }
 
-        public TileBase GetTile(Vector3Int headDirection)
+        public TileBase GetHeadTile(Vector3Int neckPos, Vector3Int targetHeadDirection)
         {
-            switch (headDirection)
+
+            Vector3Int dir = targetHeadDirection - neckPos;
+
+            switch (dir)
             {
-                case Vector3Int direction when headDirection == Vector3Int.up:
+                case Vector3Int direction when dir == Vector3Int.up:
                     return headUp;
-                case Vector3Int direction when headDirection == Vector3Int.down:
+                case Vector3Int direction when dir == Vector3Int.down:
                     return headDown;
-                case Vector3Int direction when headDirection == Vector3Int.left:
+                case Vector3Int direction when dir == Vector3Int.left:
                     return headLeft;
-                case Vector3Int direction when headDirection == Vector3Int.right:
+                case Vector3Int direction when dir == Vector3Int.right:
                     return headRight;
                 default:
                     return headDown;
