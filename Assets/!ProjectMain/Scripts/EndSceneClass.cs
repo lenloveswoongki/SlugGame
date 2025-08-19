@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-public class EndGame : MonoBehaviour
+public class EndSceneClass : MonoBehaviour
 {
     public void OnApplicationQuit()
     {
